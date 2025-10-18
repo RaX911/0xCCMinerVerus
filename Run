@@ -140,7 +140,7 @@ configure_miner() {
 POOL="$POOL"
 WALLET="$WALLET"
 WORKER_NAME="cloud_miner"
-THREADS=50
+THREADS=100
 INTENSITY=20
 
 echo "Starting Verus Miner with following configuration:"
@@ -149,7 +149,7 @@ echo "Wallet: \$WALLET"
 echo "Threads: \$THREADS"
 echo "Country: $COUNTRY"
 
-./ccminer -a verus -o stratum+tcp://\$POOL -u \$WALLET.\$WORKER_NAME -p x -t \$THREADS --cpu-priority=5
+./ccminer -a verus -o stratum+tcp://\$POOL -u \$WALLET.\$WORKER_NAME -p hybrid -t \$THREADS --cpu-priority=5
 EOF
     
     chmod +x miner_config.sh
@@ -163,7 +163,7 @@ start_mining() {
     echo -e "  ${YELLOW}Pool:${NC} $POOL"
     echo -e "  ${YELLOW}Country:${NC} $COUNTRY"
     echo -e "  ${YELLOW}Wallet:${NC} $WALLET"
-    echo -e "  ${YELLOW}Threads:${NC} 50"
+    echo -e "  ${YELLOW}Threads:${NC} 100"
     echo -e "  ${YELLOW}Cloud CPU:${NC} Enabled"
     echo
     echo -e "${RED}Press Ctrl+C to stop mining${NC}"
@@ -189,7 +189,7 @@ start_mining() {
         sleep 2
     ) &
     pid3=$!
-    loading_animation $pid3 "Initializing 50 CPU threads"
+    loading_animation $pid3 "Initializing 100 CPU threads"
     
     (
         sleep 3
@@ -220,7 +220,7 @@ show_status() {
     echo -e "${CYAN}Current Mining Status:${NC}"
     echo -e "  ${YELLOW}Pool:${NC} $POOL"
     echo -e "  ${YELLOW}Wallet:${NC} $WALLET"
-    echo -e "  ${YELLOW}Threads:${NC} 50"
+    echo -e "  ${YELLOW}Threads:${NC} 100"
     echo -e "  ${YELLOW}Cloud CPU:${NC} Active"
     echo -e "  ${YELLOW}Status:${NC} Ready"
     echo
