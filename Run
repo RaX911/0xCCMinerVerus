@@ -1,8 +1,5 @@
 #!/bin/bash
 
-# Mining Auto Configuration Script with Shadow/Cloud CPU Support
-# Supports Vipor and Luckpool with animated UI
-
 # Colors for UI
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -10,416 +7,280 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 PURPLE='\033[0;35m'
 CYAN='\033[0;36m'
-WHITE='\033[1;37m'
 NC='\033[0m' # No Color
 
-# Configuration file
-CONFIG_FILE="config.json"
-CCMINER_PATH="./ccminer"  # Adjust path to your ccminer
+# Animation characters
+ANIM_CHARS=("⣾" "⣽" "⣻" "⢿" "⡿" "⣟" "⣯" "⣷")
 
-# Shadow CPU Configuration
-SHADOW_CPU_MIN=50
-SHADOW_CPU_MAX=100
-SHADOW_CPU_CURRENT=0
-SHADOW_MODE=false
-
-# Vipor Pools (10 pools)
-VIPOR_POOLS=(
-    "sg.vipor.net:5040"
-    "eu.vipor.net:5040"
-    "us.vipor.net:5040"
-    "ca.vipor.net:5040"
-    "au.vipor.net:5040"
-    "jp.vipor.net:5040"
-    "kr.vipor.net:5040"
-    "br.vipor.net:5040"
-    "ru.vipor.net:5040"
-    "in.vipor.net:5040"
-)
-
-# Luckpool Pools (10 pools)
-LUCKPOOL_POOLS=(
-    "na.luckpool.net:3960"
-    "eu.luckpool.net:3960"
-    "ap.luckpool.net:3960"
-    "sa.luckpool.net:3960"
-    "ca.luckpool.net:3960"
-    "au.luckpool.net:3960"
-    "sg.luckpool.net:3960"
-    "jp.luckpool.net:3960"
-    "kr.luckpool.net:3960"
-    "in.luckpool.net:3960"
-)
-
-# Shadow CPU functions
-detect_shadow_cpu() {
-    echo -e "${CYAN}Detecting Shadow/Cloud CPU resources...${NC}"
+# Function to display animated loading
+loading_animation() {
+    local pid=$1
+    local text=$2
+    local count=0
     
-    # Check if we're in a cloud/shadow environment
-    if [ -f "/.dockerenv" ] || [ -f "/run/.containerenv" ] || 
-       [ "$(uname -r | grep -c microsoft)" -gt 0 ] || 
-       [ "$(systemd-detect-virt 2>/dev/null)" != "none" ] ||
-       [ -n "$KUBERNETES_SERVICE_HOST" ] || [ -n "$AWS_EXECUTION_ENV" ] ||
-       [ -n "$GOOGLE_CLOUD_PROJECT" ] || [ -n "$AZURE_PREFIX" ]; then
-        SHADOW_MODE=true
-        echo -e "${GREEN}✓ Shadow/Cloud environment detected${NC}"
+    while kill -0 $pid 2>/dev/null; do
+        local anim_char=${ANIM_CHARS[$((count % ${#ANIM_CHARS[@]}))]}
+        local progress=$(( (count * 5) % 100 ))
         
-        # Detect available CPU resources
-        local available_cpus=$(nproc)
-        local total_memory=$(grep MemTotal /proc/meminfo 2>/dev/null | awk '{print $2}' || echo "0")
-        
-        if [ "$available_cpus" -ge 8 ] || [ "$total_memory" -gt 8000000 ]; then
-            SHADOW_CPU_CURRENT=$((available_cpus * 80 / 100))
-            if [ "$SHADOW_CPU_CURRENT" -lt "$SHADOW_CPU_MIN" ]; then
-                SHADOW_CPU_CURRENT=$SHADOW_CPU_MIN
-            elif [ "$SHADOW_CPU_CURRENT" -gt "$SHADOW_CPU_MAX" ]; then
-                SHADOW_CPU_CURRENT=$SHADOW_CPU_MAX
-            fi
-            echo -e "${GREEN}✓ Allocated ${SHADOW_CPU_CURRENT} shadow CPUs${NC}"
-        else
-            echo -e "${YELLOW}⚠ Limited shadow CPU resources available${NC}"
-            SHADOW_CPU_CURRENT=$SHADOW_CPU_MIN
-        fi
-    else
-        echo -e "${YELLOW}⚠ Standard CPU environment detected${NC}"
-        SHADOW_MODE=false
-    fi
-}
-
-optimize_shadow_cpu() {
-    if [ "$SHADOW_MODE" = true ]; then
-        echo -e "${CYAN}Optimizing for Shadow CPU environment...${NC}"
-        
-        # Set CPU affinity and priority for better performance
-        if command -v taskset >/dev/null 2>&1; then
-            echo -e "${GREEN}✓ CPU affinity optimization available${NC}"
+        if [ $progress -eq 0 ] && [ $count -ne 0 ]; then
+            progress=100
         fi
         
-        if command -v nice >/dev/null 2>&1; then
-            echo -e "${GREEN}✓ Process priority optimization available${NC}"
-        fi
-        
-        # Optimize system settings for cloud environment
-        echo -e "${GREEN}✓ Shadow CPU optimization completed${NC}"
-    fi
-}
-
-# Animation functions
-show_animation() {
-    local frames=("▰▱▱▱▱▱▱" "▰▰▱▱▱▱▱" "▰▰▰▱▱▱▱" "▰▰▰▰▱▱▱" "▰▰▰▰▰▱▱" "▰▰▰▰▰▰▱" "▰▰▰▰▰▰▰" "▰▰▰▰▰▰▱" "▰▰▰▰▰▱▱" "▰▰▰▰▱▱▱" "▰▰▰▱▱▱▱" "▰▰▱▱▱▱▱")
-    for i in {1..3}; do
-        for frame in "${frames[@]}"; do
-            if [ "$SHADOW_MODE" = true ]; then
-                echo -ne "\r${PURPLE}[${frame}]${NC} Initializing Shadow Mining System..."
-            else
-                echo -ne "\r${CYAN}[${frame}]${NC} Initializing Mining System..."
-            fi
-            sleep 0.1
-        done
+        echo -ne "\r${CYAN}[${anim_char}]${NC} ${text}... ${YELLOW}${progress}%${NC}"
+        sleep 0.1
+        ((count++))
     done
-    if [ "$SHADOW_MODE" = true ]; then
-        echo -e "\r${PURPLE}[▰▰▰▰▰▰▰]${NC} Shadow Mining System Ready!          "
-    else
-        echo -e "\r${GREEN}[▰▰▰▰▰▰▰]${NC} Mining System Ready!          "
-    fi
-}
-
-progress_bar() {
-    local duration=$1
-    local steps=50
-    for ((i=0; i<=steps; i++)); do
-        percentage=$((i * 2))
-        completed=$((i * 50 / steps))
-        remaining=$((50 - completed))
-        bar=$(printf "%0.s▰" $(seq 1 $completed))
-        empty=$(printf "%0.s▱" $(seq 1 $remaining))
-        
-        # Color changes based on percentage
-        if [ $percentage -lt 30 ]; then
-            color=$RED
-        elif [ $percentage -lt 70 ]; then
-            color=$YELLOW
-        else
-            color=$GREEN
-        fi
-        
-        echo -ne "\r${color}[${bar}${empty}] ${percentage}%${NC}"
-        sleep $(echo "scale=2; $duration/$steps" | bc)
-    done
+    
+    echo -ne "\r${GREEN}[✓]${NC} ${text}... ${GREEN}100%${NC} Completed!"
     echo
 }
 
-# Check if ccminer exists
-check_ccminer() {
-    if [ ! -f "$CCMINER_PATH" ]; then
-        echo -e "${RED}Error: ccminer not found at $CCMINER_PATH${NC}"
-        echo -e "${YELLOW}Please update CCMINER_PATH variable in the script${NC}"
+# Function to validate wallet address
+validate_wallet() {
+    local wallet=$1
+    if [[ ${#wallet} -ne 34 ]]; then
+        return 1
+    fi
+    return 0
+}
+
+# Function to display banner
+show_banner() {
+    clear
+    echo -e "${PURPLE}"
+    echo "╔══════════════════════════════════════════════════════════╗"
+    echo "║                 VERUS COIN MINER                        ║"
+    echo "║               Auto Configuration Tool                   ║"
+    echo "║                 with Cloud CPU Support                  ║"
+    echo "╚══════════════════════════════════════════════════════════╝"
+    echo -e "${NC}"
+}
+
+# Function to select country
+select_country() {
+    show_banner
+    echo -e "${CYAN}Select Mining Pool Country:${NC}"
+    echo -e "${YELLOW}1. Singapore (sg.vipor.net:5040)${NC}"
+    echo -e "${YELLOW}2. Europe (eu.vipor.net:5040)${NC}"
+    echo -e "${YELLOW}3. North America (na.vipor.net:5040)${NC}"
+    echo -e "${YELLOW}4. Australia (au.vipor.net:5040)${NC}"
+    echo -e "${YELLOW}5. Japan (jp.vipor.net:5040)${NC}"
+    echo -e "${YELLOW}6. Custom Pool${NC}"
+    echo
+    
+    read -p "Enter your choice (1-6): " country_choice
+    
+    case $country_choice in
+        1)
+            POOL="sg.vipor.net:5040"
+            COUNTRY="Singapore"
+            ;;
+        2)
+            POOL="eu.vipor.net:5040"
+            COUNTRY="Europe"
+            ;;
+        3)
+            POOL="na.vipor.net:5040"
+            COUNTRY="North America"
+            ;;
+        4)
+            POOL="au.vipor.net:5040"
+            COUNTRY="Australia"
+            ;;
+        5)
+            POOL="jp.vipor.net:5040"
+            COUNTRY="Japan"
+            ;;
+        6)
+            read -p "Enter custom pool (host:port): " custom_pool
+            POOL=$custom_pool
+            COUNTRY="Custom"
+            ;;
+        *)
+            echo -e "${RED}Invalid choice! Using Singapore pool.${NC}"
+            POOL="sg.vipor.net:5040"
+            COUNTRY="Singapore"
+            ;;
+    esac
+}
+
+# Function to get wallet address
+get_wallet() {
+    while true; do
+        read -p "Enter your Verus wallet address (34 characters): " WALLET
+        
+        if validate_wallet "$WALLET"; then
+            break
+        else
+            echo -e "${RED}Invalid wallet address! Must be exactly 34 characters.${NC}"
+        fi
+    done
+}
+
+# Function to configure miner
+configure_miner() {
+    show_banner
+    echo -e "${BLUE}Configuring Verus Miner...${NC}"
+    
+    # Check if ccminer exists
+    if [ ! -f "./ccminer" ]; then
+        echo -e "${RED}Error: ccminer not found in current directory!${NC}"
         exit 1
     fi
     
-    if [ ! -x "$CCMINER_PATH" ]; then
-        chmod +x "$CCMINER_PATH"
-    fi
-}
-
-# Create config.json
-create_config() {
-    local pool=$1
-    local wallet=$2
-    local worker=$3
-    local cpu_usage=$4
+    # Make ccminer executable
+    chmod +x ./ccminer
     
-    cat > "$CONFIG_FILE" << EOF
-{
-    "pool": "$pool",
-    "wallet": "$wallet",
-    "worker": "$worker",
-    "cpu_usage": $cpu_usage,
-    "algorithm": "verus",
-    "threads": $(nproc),
-    "max-temp": 85,
-    "auto-start": true,
-    "shadow_mode": $SHADOW_MODE,
-    "shadow_cpus": $SHADOW_CPU_CURRENT
-}
+    # Create miner configuration
+    cat > miner_config.sh << EOF
+#!/bin/bash
+# Verus Miner Configuration
+# Auto-generated by Verus Miner Tool
+
+POOL="$POOL"
+WALLET="$WALLET"
+WORKER_NAME="cloud_miner"
+THREADS=50
+INTENSITY=20
+
+echo "Starting Verus Miner with following configuration:"
+echo "Pool: \$POOL"
+echo "Wallet: \$WALLET"
+echo "Threads: \$THREADS"
+echo "Country: $COUNTRY"
+
+./ccminer -a verus -o stratum+tcp://\$POOL -u \$WALLET.\$WORKER_NAME -p x -t \$THREADS --cpu-priority=5
 EOF
-    echo -e "${GREEN}Configuration file created: $CONFIG_FILE${NC}"
-}
-
-# Show mining header
-show_mining_header() {
-    clear
-    if [ "$SHADOW_MODE" = true ]; then
-        echo -e "${PURPLE}"
-        echo "  ███████╗██╗  ██╗ █████╗ ██████╗  ██████╗ ██╗    ██╗"
-        echo "  ██╔════╝██║  ██║██╔══██╗██╔══██╗██╔═══██╗██║    ██║"
-        echo "  ███████╗███████║███████║██║  ██║██║   ██║██║ █╗ ██║"
-        echo "  ╚════██║██╔══██║██╔══██║██║  ██║██║   ██║██║███╗██║"
-        echo "  ███████║██║  ██║██║  ██║██████╔╝╚██████╔╝╚███╔███╔╝"
-        echo "  ╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝╚═════╝  ╚═════╝  ╚══╝╚══╝ "
-        echo
-        echo "  ██████╗ ██████╗███╗   ███╗██╗███╗   ██╗███████╗██████╗ "
-        echo " ██╔════╝██╔════╝████╗ ████║██║████╗  ██║██╔════╝██╔══██╗"
-        echo " ██║     ██║     ██╔████╔██║██║██╔██╗ ██║█████╗  ██████╔╝"
-        echo " ██║     ██║     ██║╚██╔╝██║██║██║╚██╗██║██╔══╝  ██╔══██╗"
-        echo " ╚██████╗╚██████╗██║ ╚═╝ ██║██║██║ ╚████║███████╗██║  ██║"
-        echo "  ╚═════╝ ╚═════╝╚═╝     ╚═╝╚═╝╚═╝  ╚═══╝╚══════╝╚═╝  ╚═╝"
-        echo -e "${NC}"
-    else
-        echo -e "${PURPLE}"
-        echo "  ██████╗ ██████╗███╗   ███╗██╗███╗   ██╗███████╗██████╗ "
-        echo " ██╔════╝██╔════╝████╗ ████║██║████╗  ██║██╔════╝██╔══██╗"
-        echo " ██║     ██║     ██╔████╔██║██║██╔██╗ ██║█████╗  ██████╔╝"
-        echo " ██║     ██║     ██║╚██╔╝██║██║██║╚██╗██║██╔══╝  ██╔══██╗"
-        echo " ╚██████╗╚██████╗██║ ╚═╝ ██║██║██║ ╚████║███████╗██║  ██║"
-        echo "  ╚═════╝ ╚═════╝╚═╝     ╚═╝╚═╝╚═╝  ╚═══╝╚══════╝╚═╝  ╚═╝"
-        echo -e "${NC}"
-    fi
     
-    echo -e "${CYAN}╔══════════════════════════════════════════════╗${NC}"
-    if [ "$SHADOW_MODE" = true ]; then
-        echo -e "${CYAN}║           SHADOW MINING CONTROL PANEL         ║${NC}"
-        echo -e "${CYAN}║              Cloud CPU: $SHADOW_CPU_CURRENT cores           ║${NC}"
-    else
-        echo -e "${CYAN}║               MINING CONTROL PANEL           ║${NC}"
+    chmod +x miner_config.sh
+}
+
+# Function to start mining
+start_mining() {
+    show_banner
+    echo -e "${GREEN}Starting Verus Miner...${NC}"
+    echo -e "${CYAN}Configuration Summary:${NC}"
+    echo -e "  ${YELLOW}Pool:${NC} $POOL"
+    echo -e "  ${YELLOW}Country:${NC} $COUNTRY"
+    echo -e "  ${YELLOW}Wallet:${NC} $WALLET"
+    echo -e "  ${YELLOW}Threads:${NC} 50"
+    echo -e "  ${YELLOW}Cloud CPU:${NC} Enabled"
+    echo
+    echo -e "${RED}Press Ctrl+C to stop mining${NC}"
+    echo
+    
+    # Simulate initialization process
+    echo -e "${BLUE}Initializing Mining Process...${NC}"
+    
+    # Start background processes for loading animations
+    (
+        sleep 2
+    ) &
+    pid1=$!
+    loading_animation $pid1 "Loading mining modules"
+    
+    (
+        sleep 3
+    ) &
+    pid2=$!
+    loading_animation $pid2 "Connecting to $COUNTRY pool"
+    
+    (
+        sleep 2
+    ) &
+    pid3=$!
+    loading_animation $pid3 "Initializing 50 CPU threads"
+    
+    (
+        sleep 3
+    ) &
+    pid4=$!
+    loading_animation $pid4 "Activating cloud CPU resources"
+    
+    (
+        sleep 2
+    ) &
+    pid5=$!
+    loading_animation $pid5 "Starting mining process"
+    
+    # Wait for all animations to complete
+    wait
+    
+    echo
+    echo -e "${GREEN}Miner initialization complete! Starting mining process...${NC}"
+    echo
+    
+    # Start actual mining
+    ./miner_config.sh
+}
+
+# Function to show status
+show_status() {
+    show_banner
+    echo -e "${CYAN}Current Mining Status:${NC}"
+    echo -e "  ${YELLOW}Pool:${NC} $POOL"
+    echo -e "  ${YELLOW}Wallet:${NC} $WALLET"
+    echo -e "  ${YELLOW}Threads:${NC} 50"
+    echo -e "  ${YELLOW}Cloud CPU:${NC} Active"
+    echo -e "  ${YELLOW}Status:${NC} Ready"
+    echo
+    read -p "Press Enter to continue..."
+}
+
+# Main program
+main() {
+    # Check if running as root
+    if [[ $EUID -eq 0 ]]; then
+        echo -e "${RED}Warning: Running as root is not recommended!${NC}"
+        sleep 2
     fi
-    echo -e "${CYAN}╚══════════════════════════════════════════════╝${NC}"
-    echo
-}
-
-# Show pool selection
-show_pool_selection() {
-    echo -e "${YELLOW}Select Mining Pool:${NC}"
-    echo -e "${GREEN}1. Vipor Network${NC}"
-    echo -e "   ${WHITE}Pools available:${NC}"
-    for i in "${!VIPOR_POOLS[@]}"; do
-        echo -e "   ${CYAN}$((i+1)). ${VIPOR_POOLS[i]}${NC}"
-    done
-    echo
-    echo -e "${GREEN}2. Luckpool Network${NC}"
-    echo -e "   ${WHITE}Pools available:${NC}"
-    for i in "${!LUCKPOOL_POOLS[@]}"; do
-        echo -e "   ${CYAN}$((i+1)). ${LUCKPOOL_POOLS[i]}${NC}"
-    done
-    echo
-}
-
-# Get user input
-get_user_input() {
-    local choice
-    local wallet
-    local worker
-    local cpu_usage
     
     while true; do
-        read -p "$(echo -e ${YELLOW}'Select pool type (1 for Vipor, 2 for Luckpool): '${NC})" choice
+        show_banner
+        echo -e "${CYAN}Main Menu:${NC}"
+        echo -e "${YELLOW}1. Configure Miner${NC}"
+        echo -e "${YELLOW}2. Start Mining${NC}"
+        echo -e "${YELLOW}3. Show Status${NC}"
+        echo -e "${YELLOW}4. Exit${NC}"
+        echo
         
-        case $choice in
+        read -p "Enter your choice (1-4): " main_choice
+        
+        case $main_choice in
             1)
-                echo -e "${GREEN}Selected: Vipor Network${NC}"
-                pool_type="vipor"
-                selected_pools=("${VIPOR_POOLS[@]}")
-                break
+                select_country
+                get_wallet
+                configure_miner
+                echo -e "${GREEN}Configuration saved successfully!${NC}"
+                sleep 2
                 ;;
             2)
-                echo -e "${GREEN}Selected: Luckpool Network${NC}"
-                pool_type="luckpool"
-                selected_pools=("${LUCKPOOL_POOLS[@]}")
-                break
+                if [ ! -f "./miner_config.sh" ]; then
+                    echo -e "${RED}Please configure miner first!${NC}"
+                    sleep 2
+                    continue
+                fi
+                start_mining
+                ;;
+            3)
+                if [ ! -f "./miner_config.sh" ]; then
+                    echo -e "${RED}No configuration found!${NC}"
+                    sleep 2
+                    continue
+                fi
+                show_status
+                ;;
+            4)
+                echo -e "${GREEN}Thank you for using Verus Miner!${NC}"
+                exit 0
                 ;;
             *)
-                echo -e "${RED}Invalid selection! Please choose 1 or 2${NC}"
+                echo -e "${RED}Invalid choice! Please try again.${NC}"
+                sleep 2
                 ;;
         esac
     done
-    
-    # Select specific pool
-    echo -e "\n${WHITE}Available ${pool_type^^} pools:${NC}"
-    for i in "${!selected_pools[@]}"; do
-        echo -e "  ${CYAN}$((i+1)). ${selected_pools[i]}${NC}"
-    done
-    
-    while true; do
-        read -p "$(echo -e ${YELLOW}"Select pool (1-${#selected_pools[@]}): "${NC})" pool_choice
-        if [[ $pool_choice =~ ^[0-9]+$ ]] && [ $pool_choice -ge 1 ] && [ $pool_choice -le ${#selected_pools[@]} ]; then
-            selected_pool="${selected_pools[$((pool_choice-1))]}"
-            echo -e "${GREEN}Selected pool: $selected_pool${NC}"
-            break
-        else
-            echo -e "${RED}Invalid selection! Please choose between 1-${#selected_pools[@]}${NC}"
-        fi
-    done
-    
-    # Get wallet address
-    while true; do
-        read -p "$(echo -e ${YELLOW}'Enter Wallet Address: '${NC})" wallet
-        if [ -n "$wallet" ]; then
-            break
-        else
-            echo -e "${RED}Wallet address cannot be empty!${NC}"
-        fi
-    done
-    
-    # Get worker name
-    while true; do
-        read -p "$(echo -e ${YELLOW}'Enter Worker Name: '${NC})" worker
-        if [ -n "$worker" ]; then
-            break
-        else
-            echo -e "${RED}Worker name cannot be empty!${NC}"
-        fi
-    done
-    
-    # Get CPU usage with shadow CPU optimization
-    if [ "$SHADOW_MODE" = true ]; then
-        echo -e "${GREEN}Shadow CPU mode detected${NC}"
-        echo -e "${CYAN}Recommended CPU usage: ${SHADOW_CPU_CURRENT}% (auto-optimized)${NC}"
-        cpu_usage=$SHADOW_CPU_CURRENT
-    else
-        while true; do
-            read -p "$(echo -e ${YELLOW}'Enter CPU Usage percentage (1-100): '${NC})" cpu_usage
-            if [[ $cpu_usage =~ ^[0-9]+$ ]] && [ $cpu_usage -ge 1 ] && [ $cpu_usage -le 100 ]; then
-                break
-            else
-                echo -e "${RED}Please enter a valid CPU usage between 1-100${NC}"
-            fi
-        done
-    fi
-    
-    # Return values
-    POOL="$selected_pool"
-    WALLET="$wallet"
-    WORKER="$worker"
-    CPU_USAGE="$cpu_usage"
 }
-
-# Start mining with shadow CPU optimization
-start_mining() {
-    local pool=$1
-    local wallet=$2
-    local worker=$3
-    local cpu_usage=$4
-    
-    echo -e "\n${GREEN}Starting Mining Process...${NC}"
-    echo -e "${CYAN}Pool:${NC} $pool"
-    echo -e "${CYAN}Wallet:${NC} $wallet"
-    echo -e "${CYAN}Worker:${NC} $worker"
-    echo -e "${CYAN}CPU Usage:${NC} $cpu_usage%"
-    echo -e "${CYAN}Threads:${NC} $(nproc)"
-    if [ "$SHADOW_MODE" = true ]; then
-        echo -e "${PURPLE}Mode:${NC} Shadow CPU Optimized"
-        echo -e "${PURPLE}Allocated CPUs:${NC} $SHADOW_CPU_CURRENT"
-    fi
-    
-    # Show progress bar
-    progress_bar 2
-    
-    # Create config file
-    create_config "$pool" "$wallet" "$worker" "$cpu_usage"
-    
-    echo -e "\n${GREEN}Launching ccminer...${NC}"
-    echo -e "${YELLOW}Press Ctrl+C to stop mining${NC}"
-    echo -e "${CYAN}╔══════════════════════════════════════════════╗${NC}"
-    
-    # Calculate threads based on shadow CPU optimization
-    local available_threads=$(nproc)
-    local mining_threads=$((available_threads * cpu_usage / 100))
-    
-    # Ensure minimum threads for shadow CPU
-    if [ "$SHADOW_MODE" = true ] && [ $mining_threads -lt $SHADOW_CPU_MIN ]; then
-        mining_threads=$SHADOW_CPU_MIN
-        echo -e "${YELLOW}Adjusted to minimum shadow CPU threads: $mining_threads${NC}"
-    fi
-    
-    # Start ccminer with the configuration
-    if [ "$SHADOW_MODE" = true ]; then
-        # Enhanced command for shadow CPU environment
-        echo -e "${PURPLE}Using shadow CPU optimized configuration...${NC}"
-        "$CCMINER_PATH" -a verus -o stratum+tcp://$pool -u $wallet.$worker -p x -t $mining_threads --cpu-priority=5
-    else
-        # Standard command for local CPU
-        "$CCMINER_PATH" -a verus -o stratum+tcp://$pool -u $wallet.$worker -p x -t $mining_threads
-    fi
-}
-
-# Enhanced main function with shadow CPU detection
-main() {
-    # Detect shadow/cloud CPU environment first
-    detect_shadow_cpu
-    optimize_shadow_cpu
-    
-    show_mining_header
-    show_animation
-    echo
-    
-    check_ccminer
-    show_pool_selection
-    
-    # Get user input
-    get_user_input
-    
-    # Confirm and start
-    echo -e "\n${YELLOW}Summary:${NC}"
-    echo -e "  Pool: $POOL"
-    echo -e "  Wallet: $WALLET"
-    echo -e "  Worker: $WORKER"
-    echo -e "  CPU Usage: $CPU_USAGE%"
-    if [ "$SHADOW_MODE" = true ]; then
-        echo -e "  Mode: ${PURPLE}Shadow CPU Optimized${NC}"
-    fi
-    
-    read -p "$(echo -e ${YELLOW}'Start mining? (y/n): '${NC})" confirm
-    if [[ $confirm =~ ^[Yy]$ ]]; then
-        start_mining "$POOL" "$WALLET" "$WORKER" "$CPU_USAGE"
-    else
-        echo -e "${RED}Mining cancelled.${NC}"
-        exit 0
-    fi
-}
-
-# Enhanced error handling
-set -e
-trap 'echo -e "${RED}Error occurred at line $LINENO${NC}"; exit 1' ERR
 
 # Run main function
 main "$@"
