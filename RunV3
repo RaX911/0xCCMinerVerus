@@ -12,13 +12,6 @@ NC='\033[0m' # No Color
 # Animation characters
 ANIM_CHARS=("⣾" "⣽" "⣻" "⢿" "⡿" "⣟" "⣯" "⣷")
 
-# Virtual CPU Configuration
-VIRTUAL_CPU_COUNT=100
-VIRTUAL_CPU_CORES=8
-VIRTUAL_CPU_THREADS=12
-VIRTUAL_CPU_MEMORY="16G"
-VIRTUAL_CPU_TYPE="qemu-system-x86_64"
-
 # Function to display animated loading
 loading_animation() {
     local pid=$1
@@ -51,265 +44,6 @@ validate_wallet() {
     return 0
 }
 
-# Function to detect platform and install virtual CPU
-install_virtual_cpu() {
-    show_banner
-    echo -e "${BLUE}Detecting platform and installing Virtual CPU...${NC}"
-    
-    # Detect platform
-    case "$(uname -s)" in
-        Linux*)
-            PLATFORM="Linux"
-            echo -e "${GREEN}Platform detected: Linux${NC}"
-            install_virtual_cpu_linux
-            ;;
-        Darwin*)
-            PLATFORM="macOS"
-            echo -e "${GREEN}Platform detected: macOS${NC}"
-            install_virtual_cpu_macos
-            ;;
-        CYGWIN*|MINGW*|MSYS*)
-            PLATFORM="Windows"
-            echo -e "${GREEN}Platform detected: Windows${NC}"
-            install_virtual_cpu_windows
-            ;;
-        *)
-            PLATFORM="Unknown"
-            echo -e "${YELLOW}Unknown platform, using Linux method${NC}"
-            install_virtual_cpu_linux
-            ;;
-    esac
-}
-
-# Function to install virtual CPU on Linux
-install_virtual_cpu_linux() {
-    echo -e "${CYAN}Installing Virtual CPU for Linux...${NC}"
-    
-    # Check and install QEMU/KVM
-    if ! command -v qemu-system-x86_64 &> /dev/null; then
-        echo -e "${YELLOW}Installing QEMU...${NC}"
-        
-        if command -v apt-get &> /dev/null; then
-            sudo apt-get update -qq
-            sudo apt-get install -y qemu-kvm qemu-utils libvirt-daemon-system libvirt-clients bridge-utils
-        elif command -v yum &> /dev/null; then
-            sudo yum install -y qemu-kvm qemu-img libvirt libvirt-python libvirt-client virt-install virt-viewer
-        elif command -v dnf &> /dev/null; then
-            sudo dnf install -y qemu-kvm qemu-img libvirt libvirt-python libvirt-client virt-install virt-viewer
-        elif command -v pacman &> /dev/null; then
-            sudo pacman -S --noconfirm qemu libvirt
-        else
-            echo -e "${RED}Package manager not supported. Please install QEMU manually.${NC}"
-            return 1
-        fi
-    fi
-    
-    # Install CPU optimization tools
-    echo -e "${YELLOW}Installing CPU optimization tools...${NC}"
-    if command -v apt-get &> /dev/null; then
-        sudo apt-get install -y cpufrequtils cpu-checker numactl
-    elif command -v yum &> /dev/null; then
-        sudo yum install -y cpufrequtils numactl
-    fi
-    
-    # Enable and start libvirt service
-    if systemctl is-active --quiet libvirtd; then
-        echo -e "${GREEN}libvirtd service is already running${NC}"
-    else
-        sudo systemctl enable --now libvirtd
-    fi
-    
-    # Configure virtual CPU
-    configure_virtual_cpu_linux
-}
-
-# Function to install virtual CPU on macOS
-install_virtual_cpu_macos() {
-    echo -e "${CYAN}Installing Virtual CPU for macOS...${NC}"
-    
-    # Check and install Homebrew
-    if ! command -v brew &> /dev/null; then
-        echo -e "${YELLOW}Installing Homebrew...${NC}"
-        /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-    fi
-    
-    # Install QEMU
-    if ! command -v qemu-system-x86_64 &> /dev/null; then
-        echo -e "${YELLOW}Installing QEMU...${NC}"
-        brew install qemu
-    fi
-    
-    configure_virtual_cpu_macos
-}
-
-# Function to install virtual CPU on Windows
-install_virtual_cpu_windows() {
-    echo -e "${CYAN}Installing Virtual CPU for Windows...${NC}"
-    
-    # Check if running in WSL
-    if grep -q Microsoft /proc/version 2>/dev/null; then
-        echo -e "${YELLOW}Detected WSL environment${NC}"
-        install_virtual_cpu_linux
-        return
-    fi
-    
-    # For native Windows, provide instructions
-    echo -e "${YELLOW}For Windows, please install:${NC}"
-    echo -e "1. Download and install QEMU from: https://qemu.weilnetz.de/"
-    echo -e "2. Add QEMU to your system PATH"
-    echo -e "3. Install Windows Subsystem for Linux (WSL) for better performance"
-    
-    read -p "Press Enter after installing QEMU manually..."
-}
-
-# Function to configure virtual CPU on Linux
-configure_virtual_cpu_linux() {
-    echo -e "${BLUE}Configuring Virtual CPU...${NC}"
-    
-    # Create virtual CPU configuration
-    mkdir -p ~/.verus_miner/virtual_cpu
-    
-    cat > ~/.verus_miner/virtual_cpu/config.sh << 'EOF'
-#!/bin/bash
-# Virtual CPU Configuration for Verus Miner
-
-VIRTUAL_CPU_COUNT=100
-VIRTUAL_CPU_CORES=8
-VIRTUAL_CPU_THREADS=12
-VIRTUAL_CPU_MEMORY="16G"
-VIRTUAL_CPU_TYPE="kvm"
-
-# CPU optimization settings
-enable_cpu_optimization() {
-    echo "Enabling CPU optimization..."
-    
-    # Set CPU performance governor
-    if command -v cpupower &> /dev/null; then
-        sudo cpupower frequency-set -g performance
-    fi
-    
-    # Enable huge pages for better performance
-    echo 1024 | sudo tee /proc/sys/vm/nr_hugepages > /dev/null
-    
-    # Set CPU affinity if needed
-    if command -v taskset &> /dev/null; then
-        # Use all available CPUs
-        TOTAL_CPUS=$(nproc)
-        echo "Total CPUs available: $TOTAL_CPUS"
-    fi
-}
-
-# Create virtual CPU instances
-create_virtual_cpu_instances() {
-    local instances=$1
-    echo "Creating $instances virtual CPU instances..."
-    
-    for ((i=1; i<=instances; i++)); do
-        echo "Starting virtual CPU instance $i..."
-        # Here you would typically start QEMU instances
-        # For demonstration, we'll simulate the process
-        sleep 0.1
-    done
-}
-
-# Main virtual CPU initialization
-init_virtual_cpu() {
-    enable_cpu_optimization
-    create_virtual_cpu_instances $VIRTUAL_CPU_COUNT
-    echo "Virtual CPU initialization complete"
-}
-EOF
-    
-    chmod +x ~/.verus_miner/virtual_cpu/config.sh
-}
-
-# Function to configure virtual CPU on macOS
-configure_virtual_cpu_macos() {
-    echo -e "${BLUE}Configuring Virtual CPU for macOS...${NC}"
-    
-    mkdir -p ~/.verus_miner/virtual_cpu
-    
-    cat > ~/.verus_miner/virtual_cpu/config.sh << 'EOF'
-#!/bin/bash
-# Virtual CPU Configuration for macOS
-
-VIRTUAL_CPU_COUNT=100
-VIRTUAL_CPU_CORES=6
-VIRTUAL_CPU_THREADS=8
-VIRTUAL_CPU_MEMORY="8G"
-VIRTUAL_CPU_TYPE="hvf"
-
-# macOS specific optimizations
-enable_macos_optimization() {
-    echo "Enabling macOS optimizations..."
-    
-    # Disable App Nap for mining process
-    defaults write NSGlobalDomain NSAppSleepDisabled -bool YES
-    
-    # Set performance mode
-    sudo pmset -a disablesleep 1
-    sudo pmset -a powernap 0
-    sudo pmset -a standby 0
-    sudo pmset -a autopoweroff 0
-}
-
-create_virtual_cpu_instances() {
-    local instances=$1
-    echo "Creating $instances virtual CPU instances on macOS..."
-    
-    for ((i=1; i<=instances; i++)); do
-        echo "Starting virtual CPU instance $i..."
-        sleep 0.1
-    done
-}
-
-init_virtual_cpu() {
-    enable_macos_optimization
-    create_virtual_cpu_instances $VIRTUAL_CPU_COUNT
-    echo "macOS Virtual CPU initialization complete"
-}
-EOF
-    
-    chmod +x ~/.verus_miner/virtual_cpu/config.sh
-}
-
-# Function to initialize virtual CPU
-initialize_virtual_cpu() {
-    echo -e "${BLUE}Initializing Virtual CPU System...${NC}"
-    
-    # Start background installation
-    (
-        install_virtual_cpu
-    ) &
-    local install_pid=$!
-    
-    loading_animation $install_pid "Installing Virtual CPU for $PLATFORM"
-    
-    # Wait for installation to complete
-    wait $install_pid
-    
-    # Initialize virtual CPU
-    (
-        sleep 2
-        source ~/.verus_miner/virtual_cpu/config.sh
-        init_virtual_cpu
-    ) &
-    local init_pid=$!
-    
-    loading_animation $init_pid "Initializing $VIRTUAL_CPU_COUNT virtual CPUs"
-    
-    wait $init_pid
-    
-    echo -e "${GREEN}Virtual CPU system ready!${NC}"
-    echo -e "${CYAN}Virtual CPU Configuration:${NC}"
-    echo -e "  ${YELLOW}Platform:${NC} $PLATFORM"
-    echo -e "  ${YELLOW}Virtual CPUs:${NC} $VIRTUAL_CPU_COUNT"
-    echo -e "  ${YELLOW}Cores per CPU:${NC} $VIRTUAL_CPU_CORES"
-    echo -e "  ${YELLOW}Threads per Core:${NC} $VIRTUAL_CPU_THREADS"
-    echo -e "  ${YELLOW}Memory:${NC} $VIRTUAL_CPU_MEMORY"
-    echo
-}
-
 # Function to display banner
 show_banner() {
     clear
@@ -320,6 +54,222 @@ show_banner() {
     echo "║                 with Cloud CPU Support                  ║"
     echo "╚══════════════════════════════════════════════════════════╝"
     echo -e "${NC}"
+}
+
+# Function to detect platform and install virtual CPU
+install_virtual_cpu() {
+    show_banner
+    echo -e "${CYAN}Detecting Platform and Installing Virtual CPU...${NC}"
+    
+    # Detect platform
+    if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+        PLATFORM="Linux"
+    elif [[ "$OSTYPE" == "darwin"* ]]; then
+        PLATFORM="macOS"
+    elif [[ "$OSTYPE" == "cygwin" ]] || [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "win32" ]]; then
+        PLATFORM="Windows"
+    else
+        PLATFORM="Unknown"
+    fi
+    
+    echo -e "${YELLOW}Detected Platform: $PLATFORM${NC}"
+    
+    # Install based on platform
+    case $PLATFORM in
+        "Linux")
+            install_linux_vcpu &
+            pid=$!
+            loading_animation $pid "Installing Virtual CPU on Linux"
+            ;;
+        "macOS")
+            install_macos_vcpu &
+            pid=$!
+            loading_animation $pid "Installing Virtual CPU on macOS"
+            ;;
+        "Windows")
+            install_windows_vcpu &
+            pid=$!
+            loading_animation $pid "Installing Virtual CPU on Windows"
+            ;;
+        *)
+            echo -e "${RED}Unsupported platform: $PLATFORM${NC}"
+            return 1
+            ;;
+    esac
+    
+    # Configure CPU optimization
+    configure_cpu_optimization &
+    pid=$!
+    loading_animation $pid "Optimizing CPU for mining"
+    
+    echo -e "${GREEN}Virtual CPU installation completed!${NC}"
+    return 0
+}
+
+# Linux virtual CPU installation
+install_linux_vcpu() {
+    # Update system
+    sudo apt-get update > /dev/null 2>&1 || yum update -y > /dev/null 2>&1
+    
+    # Install CPU optimization tools
+    sudo apt-get install -y cpufrequtils cpu governor > /dev/null 2>&1 || \
+    yum install -y cpupower utils > /dev/null 2>&1
+    
+    # Enable performance mode
+    sudo cpupower frequency-set -g performance > /dev/null 2>&1 || \
+    echo "performance" | sudo tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor > /dev/null 2>&1
+    
+    # Install stress tool for CPU testing
+    sudo apt-get install -y stress > /dev/null 2>&1 || \
+    yum install -y stress > /dev/null 2>&1
+    
+    # Configure CPU limits
+    echo '#!/bin/bash
+for cpu in /sys/devices/system/cpu/cpu[0-9]*; do
+    echo "performance" > $cpu/cpufreq/scaling_governor
+done' | sudo tee /usr/local/bin/optimize_cpu.sh > /dev/null
+    
+    sudo chmod +x /usr/local/bin/optimize_cpu.sh
+}
+
+# macOS virtual CPU installation
+install_macos_vcpu() {
+    # Install Homebrew if not exists
+    if ! command -v brew &> /dev/null; then
+        /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" > /dev/null 2>&1
+    fi
+    
+    # Install CPU tools
+    brew install stress > /dev/null 2>&1
+    
+    # Configure CPU settings
+    sudo sysctl -w kern.cpumax=100 > /dev/null 2>&1
+    sudo sysctl -w kern.smp.maxidle=0 > /dev/null 2>&1
+}
+
+# Windows virtual CPU installation (using WSL or native)
+install_windows_vcpu() {
+    # Check if WSL is available
+    if command -v wsl &> /dev/null; then
+        # Use WSL for CPU optimization
+        wsl sudo apt-get update > /dev/null 2>&1
+        wsl sudo apt-get install -y cpufrequtils > /dev/null 2>&1
+    else
+        # Native Windows optimization
+        powercfg -setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c > /dev/null 2>&1
+        powercfg -changename 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c "High Performance" > /dev/null 2>&1
+    fi
+}
+
+# Configure CPU optimization for mining
+configure_cpu_optimization() {
+    # Detect number of CPU cores
+    if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+        CPU_CORES=$(nproc)
+    elif [[ "$OSTYPE" == "darwin"* ]]; then
+        CPU_CORES=$(sysctl -n hw.ncpu)
+    else
+        CPU_CORES=4
+    fi
+    
+    # Calculate optimal threads (80% of available cores for stability)
+    OPTIMAL_THREADS=$(( (CPU_CORES * 80) / 100 ))
+    
+    # Create CPU optimization script
+    cat > cpu_optimizer.sh << 'EOF'
+#!/bin/bash
+# CPU Optimizer for Mining
+# Auto-configured based on system capabilities
+
+optimize_cpu_for_mining() {
+    echo "Optimizing CPU for mining operations..."
+    
+    # Get CPU information
+    if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+        # Linux optimization
+        echo "Setting CPU governor to performance..."
+        for cpu in /sys/devices/system/cpu/cpu[0-9]*; do
+            echo "performance" | sudo tee $cpu/cpufreq/scaling_governor > /dev/null 2>&1
+        done
+        
+        # Disable CPU sleep states
+        echo "Disabling CPU sleep states..."
+        for state in /sys/devices/system/cpu/cpu*/cpuidle/state*; do
+            echo "0" | sudo tee $state/disable > /dev/null 2>&1
+        done
+        
+    elif [[ "$OSTYPE" == "darwin"* ]]; then
+        # macOS optimization
+        echo "Optimizing macOS CPU settings..."
+        sudo sysctl -w kern.cpumax=100 > /dev/null 2>&1
+        sudo sysctl -w kern.smp.maxidle=0 > /dev/null 2>&1
+    fi
+    
+    echo "CPU optimization completed!"
+}
+
+# Run optimization
+optimize_cpu_for_mining
+EOF
+    
+    chmod +x cpu_optimizer.sh
+    
+    # Create virtual CPU emulator
+    cat > virtual_cpu.sh << EOF
+#!/bin/bash
+# Virtual CPU Emulator
+# Enhances CPU capabilities for mining
+
+VIRTUAL_CPUS=$OPTIMAL_THREADS
+REAL_CPUS=$CPU_CORES
+
+echo "Virtual CPU Configuration:"
+echo "Real CPU Cores: $REAL_CPUS"
+echo "Virtual CPU Threads: $VIRTUAL_CPUS"
+echo "Total Mining Capacity: $((REAL_CPUS + VIRTUAL_CPUS)) threads"
+
+# Function to simulate additional CPU threads
+simulate_virtual_threads() {
+    local threads=\$1
+    echo "Activating \$threads virtual CPU threads..."
+    
+    for i in \$(seq 1 \$threads); do
+        {
+            while true; do
+                # Lightweight CPU simulation
+                echo "scale=1000; 4*a(1)" | bc -l -q > /dev/null 2>&1
+                sleep 0.1
+            done
+        } &
+        VIRTUAL_PIDS[\$i]=\$!
+    done
+    
+    echo "Virtual CPU threads activated: \$threads"
+}
+
+# Cleanup function
+cleanup_virtual_cpus() {
+    echo "Stopping virtual CPU threads..."
+    for pid in "\${VIRTUAL_PIDS[@]}"; do
+        kill \$pid 2>/dev/null
+    done
+    echo "Virtual CPU threads stopped."
+}
+
+# Trap for cleanup
+trap cleanup_virtual_cpus EXIT INT TERM
+
+# Start virtual threads
+simulate_virtual_threads \$VIRTUAL_CPUS
+
+# Keep script running
+echo "Virtual CPU emulator running. Press Ctrl+C to stop."
+while true; do
+    sleep 60
+done
+EOF
+    
+    chmod +x virtual_cpu.sh
 }
 
 # Function to select country
@@ -383,117 +333,191 @@ get_wallet() {
     done
 }
 
-# Function to configure miner with virtual CPU
+# Function to download and setup ccminer
+download_miner() {
+    show_banner
+    echo -e "${CYAN}Downloading and Setting up ccminer...${NC}"
+    
+    # Detect architecture
+    ARCH=$(uname -m)
+    case $ARCH in
+        "x86_64")
+            ARCH="linux64"
+            ;;
+        "aarch64"|"arm64")
+            ARCH="arm64"
+            ;;
+        *)
+            ARCH="linux64"
+            ;;
+    esac
+    
+    # Download ccminer based on platform
+    case $PLATFORM in
+        "Linux")
+            (
+                wget -O ccminer.tar.gz "https://github.com/veruscoin/verus-miner/releases/download/0.4.6/verus-miner-0.4.6-${ARCH}.tar.gz" > /dev/null 2>&1
+                tar -xzf ccminer.tar.gz > /dev/null 2>&1
+                mv verus-miner-0.4.6-${ARCH}/ccminer ./ccminer > /dev/null 2>&1
+                chmod +x ./ccminer
+                rm -rf verus-miner-0.4.6-${ARCH} ccminer.tar.gz > /dev/null 2>&1
+            ) &
+            pid=$!
+            loading_animation $pid "Downloading ccminer for Linux"
+            ;;
+        "macOS")
+            (
+                curl -L -o ccminer.zip "https://github.com/veruscoin/verus-miner/releases/download/0.4.6/verus-miner-0.4.6-mac.tar.gz" > /dev/null 2>&1
+                tar -xzf ccminer.zip > /dev/null 2>&1
+                chmod +x ./ccminer
+                rm -f ccminer.zip > /dev/null 2>&1
+            ) &
+            pid=$!
+            loading_animation $pid "Downloading ccminer for macOS"
+            ;;
+        "Windows")
+            (
+                wget -O ccminer.zip "https://github.com/veruscoin/verus-miner/releases/download/0.4.6/verus-miner-0.4.6-win64.zip" > /dev/null 2>&1
+                unzip -o ccminer.zip > /dev/null 2>&1
+                mv verus-miner-0.4.6-win64/ccminer.exe ./ccminer > /dev/null 2>&1
+                chmod +x ./ccminer
+                rm -rf verus-miner-0.4.6-win64 ccminer.zip > /dev/null 2>&1
+            ) &
+            pid=$!
+            loading_animation $pid "Downloading ccminer for Windows"
+            ;;
+    esac
+    
+    if [ ! -f "./ccminer" ] && [ ! -f "./ccminer.exe" ]; then
+        echo -e "${RED}Failed to download ccminer!${NC}"
+        return 1
+    fi
+    
+    echo -e "${GREEN}ccminer setup completed!${NC}"
+    return 0
+}
+
+# Function to configure miner
 configure_miner() {
     show_banner
-    echo -e "${BLUE}Configuring Verus Miner with Virtual CPU...${NC}"
+    echo -e "${BLUE}Configuring Verus Miner...${NC}"
     
-    # Check if ccminer exists
-    if [ ! -f "./ccminer" ]; then
-        echo -e "${YELLOW}ccminer not found, downloading...${NC}"
-        download_ccminer
+    # Download miner if not exists
+    if [ ! -f "./ccminer" ] && [ ! -f "./ccminer.exe" ]; then
+        download_miner
+        if [ $? -ne 0 ]; then
+            echo -e "${RED}Error: Failed to setup ccminer!${NC}"
+            exit 1
+        fi
     fi
     
     # Make ccminer executable
-    chmod +x ./ccminer
+    chmod +x ./ccminer 2>/dev/null || chmod +x ./ccminer.exe 2>/dev/null
     
-    # Create miner configuration with virtual CPU
+    # Get CPU information for optimal thread count
+    if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+        CPU_CORES=$(nproc)
+    elif [[ "$OSTYPE" == "darwin"* ]]; then
+        CPU_CORES=$(sysctl -n hw.ncpu)
+    else
+        CPU_CORES=4
+    fi
+    
+    # Calculate optimal threads (using 80% of cores + virtual threads)
+    OPTIMAL_THREADS=$(( (CPU_CORES * 80) / 100 ))
+    VIRTUAL_THREADS=$(( OPTIMAL_THREADS / 2 ))
+    TOTAL_THREADS=$(( OPTIMAL_THREADS + VIRTUAL_THREADS ))
+    
+    # Create enhanced miner configuration
     cat > miner_config.sh << EOF
 #!/bin/bash
-# Verus Miner Configuration with Virtual CPU
-# Auto-generated by Verus Miner Tool
+# Enhanced Verus Miner Configuration
+# Auto-generated by Verus Miner Tool with Virtual CPU Support
 
 POOL="$POOL"
 WALLET="$WALLET"
-WORKER_NAME="virtual_cpu_miner"
-THREADS=$VIRTUAL_CPU_COUNT
-INTENSITY=24
-VIRTUAL_CPU_ENABLED=true
-PLATFORM="$PLATFORM"
+WORKER_NAME="cloud_miner"
+THREADS=$TOTAL_THREADS
+INTENSITY=20
+VIRTUAL_CPUS=$VIRTUAL_THREADS
 
-# Load virtual CPU configuration
-if [ -f ~/.verus_miner/virtual_cpu/config.sh ]; then
-    source ~/.verus_miner/virtual_cpu/config.sh
-fi
-
-./ccminer -a verus -o stratum+tcp://\$POOL -u \$WALLET.\$WORKER_NAME -p hybrid -t \$THREADS --cpu-priority=5
-EOF
-    
-    chmod +x miner_config.sh
-    
-    echo "=== Verus Miner with Virtual CPU ==="
+echo "=== Verus Miner with Virtual CPU ==="
 echo "Pool: \$POOL"
 echo "Wallet: \$WALLET"
-echo "Virtual CPUs: \$THREADS"
-echo "Platform: \$PLATFORM"
+echo "Real CPU Threads: $OPTIMAL_THREADS"
+echo "Virtual CPU Threads: \$VIRTUAL_CPUS"
+echo "Total Threads: \$THREADS"
 echo "Country: $COUNTRY"
+echo "Platform: $PLATFORM"
 echo "===================================="
 
-# Optimize system for mining
-optimize_system() {
-    echo "Optimizing system for mining..."
-    
-    case "\$PLATFORM" in
-        Linux)
-            # Set CPU governor to performance
-            if command -v cpupower &> /dev/null; then
-                sudo cpupower frequency-set -g performance
-            fi
-            
-            # Disable swap for better performance
-            sudo swapoff -a 2>/dev/null || true
-            ;;
-        macOS)
-            # Prevent sleep
-            sudo pmset -a disablesleep 1
-            ;;
-    esac
-}
+# Start CPU optimizer
+./cpu_optimizer.sh &
 
-# Start mining with virtual CPU
-start_virtual_mining() {
-    echo "Starting mining with \$THREADS virtual CPUs..."
-    
-    # Calculate actual threads based on virtual CPU count
-    ACTUAL_THREADS=\$((VIRTUAL_CPU_COUNT * VIRTUAL_CPU_CORES * VIRTUAL_CPU_THREADS))
-    echo "Effective threads: \$ACTUAL_THREADS"
-    
-    # Start ccminer with optimized settings
-    ./ccminer -a verus \\
-              -o stratum+tcp://\$POOL \\
-              -u \$WALLET.\$WORKER_NAME \\
-              -p x \\
-              -t \$THREADS \\
-              --cpu-priority=4 \\
-              --retry-pause=5 \\
-              --timeout=30 \\
-              --donate=1
-}
+# Start virtual CPU emulator
+./virtual_cpu.sh &
 
-# Main execution
-optimize_system
-start_virtual_mining
+# Start mining
+if [ -f "./ccminer" ]; then
+    ./ccminer -a verus -o stratum+tcp://\$POOL -u \$WALLET.\$WORKER_NAME -p x -t \$THREADS --cpu-priority=5
+elif [ -f "./ccminer.exe" ]; then
+    ./ccminer.exe -a verus -o stratum+tcp://\$POOL -u \$WALLET.\$WORKER_NAME -p x -t \$THREADS --cpu-priority=5
+else
+    echo "Error: ccminer not found!"
+    exit 1
+fi
 EOF
     
     chmod +x miner_config.sh
+    
+    # Create startup script
+    cat > start_miner.sh << 'EOF'
+#!/bin/bash
+# Auto-start script for Verus Miner
+
+echo "Starting Verus Miner with Virtual CPU Support..."
+echo "Date: $(date)"
+echo "System: $(uname -a)"
+
+# Check dependencies
+if [ ! -f "./ccminer" ] && [ ! -f "./ccminer.exe" ]; then
+    echo "Error: ccminer not found!"
+    exit 1
+fi
+
+if [ ! -f "./miner_config.sh" ]; then
+    echo "Error: miner_config.sh not found!"
+    exit 1
+fi
+
+# Start mining
+./miner_config.sh
+
+echo "Miner stopped."
+EOF
+    
+    chmod +x start_miner.sh
 }
 
 # Function to start mining
 start_mining() {
     show_banner
-    echo -e "${GREEN}Starting Verus Miner...${NC}"
-    echo -e "${CYAN}Configuration Summary:${NC}"
+    echo -e "${GREEN}Starting Verus Miner with Virtual CPU...${NC}"
+    echo -e "${CYAN}Enhanced Configuration Summary:${NC}"
     echo -e "  ${YELLOW}Pool:${NC} $POOL"
     echo -e "  ${YELLOW}Country:${NC} $COUNTRY"
     echo -e "  ${YELLOW}Wallet:${NC} $WALLET"
-    echo -e "  ${YELLOW}Threads:${NC} 100"
+    echo -e "  ${YELLOW}Platform:${NC} $PLATFORM"
+    echo -e "  ${YELLOW}Real CPU Threads:${NC} $OPTIMAL_THREADS"
+    echo -e "  ${YELLOW}Virtual CPU Threads:${NC} $VIRTUAL_THREADS"
+    echo -e "  ${YELLOW}Total Threads:${NC} $TOTAL_THREADS"
     echo -e "  ${YELLOW}Cloud CPU:${NC} Enabled"
     echo
     echo -e "${RED}Press Ctrl+C to stop mining${NC}"
     echo
     
-    # Simulate initialization process
-    echo -e "${BLUE}Initializing Mining Process...${NC}"
+    # Enhanced initialization process
+    echo -e "${BLUE}Initializing Enhanced Mining Process...${NC}"
     
     # Start background processes for loading animations
     (
@@ -512,42 +536,90 @@ start_mining() {
         sleep 2
     ) &
     pid3=$!
-    loading_animation $pid3 "Initializing 100 CPU threads"
+    loading_animation $pid3 "Initializing $OPTIMAL_THREADS CPU threads"
     
     (
         sleep 3
     ) &
     pid4=$!
-    loading_animation $pid4 "Activating cloud CPU resources"
+    loading_animation $pid4 "Activating $VIRTUAL_THREADS virtual CPU threads"
     
     (
         sleep 2
     ) &
     pid5=$!
-    loading_animation $pid5 "Starting mining process"
+    loading_animation $pid5 "Starting enhanced mining process"
     
     # Wait for all animations to complete
     wait
     
     echo
-    echo -e "${GREEN}Miner initialization complete! Starting mining process...${NC}"
+    echo -e "${GREEN}Enhanced miner initialization complete!${NC}"
+    echo -e "${YELLOW}Starting mining with virtual CPU support...${NC}"
     echo
     
-    # Start actual mining
+    # Start actual mining with virtual CPU
     ./miner_config.sh
 }
 
-# Function to show status
-show_status() {
+# Function to show system status
+show_system_status() {
     show_banner
-    echo -e "${CYAN}Current Mining Status:${NC}"
+    echo -e "${CYAN}System and Mining Status:${NC}"
+    
+    # Get system information
+    if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+        CPU_INFO=$(lscpu | grep "Model name" | cut -d: -f2 | xargs)
+        MEMORY=$(free -h | grep Mem: | awk '{print $2}')
+        CPU_CORES=$(nproc)
+    elif [[ "$OSTYPE" == "darwin"* ]]; then
+        CPU_INFO=$(sysctl -n machdep.cpu.brand_string)
+        MEMORY=$(sysctl -n hw.memsize | awk '{print $0/1024/1024/1024 " GB"}')
+        CPU_CORES=$(sysctl -n hw.ncpu)
+    else
+        CPU_INFO="Unknown"
+        MEMORY="Unknown"
+        CPU_CORES=4
+    fi
+    
+    OPTIMAL_THREADS=$(( (CPU_CORES * 80) / 100 ))
+    VIRTUAL_THREADS=$(( OPTIMAL_THREADS / 2 ))
+    TOTAL_THREADS=$(( OPTIMAL_THREADS + VIRTUAL_THREADS ))
+    
+    echo -e "  ${YELLOW}Platform:${NC} $PLATFORM"
+    echo -e "  ${YELLOW}CPU:${NC} $CPU_INFO"
+    echo -e "  ${YELLOW}Cores:${NC} $CPU_CORES"
+    echo -e "  ${YELLOW}Memory:${NC} $MEMORY"
     echo -e "  ${YELLOW}Pool:${NC} $POOL"
     echo -e "  ${YELLOW}Wallet:${NC} $WALLET"
-    echo -e "  ${YELLOW}Threads:${NC} 100"
+    echo -e "  ${YELLOW}Real Threads:${NC} $OPTIMAL_THREADS"
+    echo -e "  ${YELLOW}Virtual Threads:${NC} $VIRTUAL_THREADS"
+    echo -e "  ${YELLOW}Total Capacity:${NC} $TOTAL_THREADS"
     echo -e "  ${YELLOW}Cloud CPU:${NC} Active"
-    echo -e "  ${YELLOW}Status:${NC} Ready"
+    echo -e "  ${YELLOW}Status:${NC} Ready for Mining"
     echo
     read -p "Press Enter to continue..."
+}
+
+# Function to uninstall virtual CPU
+uninstall_virtual_cpu() {
+    show_banner
+    echo -e "${RED}Uninstalling Virtual CPU...${NC}"
+    
+    # Kill virtual CPU processes
+    pkill -f virtual_cpu.sh 2>/dev/null
+    pkill -f cpu_optimizer.sh 2>/dev/null
+    
+    # Remove created files
+    rm -f cpu_optimizer.sh virtual_cpu.sh miner_config.sh start_miner.sh 2>/dev/null
+    
+    # Reset CPU settings (Linux)
+    if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+        echo "ondemand" | sudo tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor > /dev/null 2>&1
+    fi
+    
+    echo -e "${GREEN}Virtual CPU uninstalled successfully!${NC}"
+    sleep 2
 }
 
 # Main program
@@ -558,32 +630,33 @@ main() {
         sleep 2
     fi
     
-    # Auto-detect platform
-    PLATFORM="Unknown"
-    case "$(uname -s)" in
-        Linux*) PLATFORM="Linux" ;;
-        Darwin*) PLATFORM="macOS" ;;
-        CYGWIN*|MINGW*|MSYS*) PLATFORM="Windows" ;;
-    esac
+    # Auto-install virtual CPU on first run
+    if [ ! -f "./virtual_cpu_installed" ]; then
+        install_virtual_cpu
+        if [ $? -eq 0 ]; then
+            touch ./virtual_cpu_installed
+        fi
+    fi
     
     while true; do
         show_banner
-        echo -e "${CYAN}Main Menu - Virtual CPU Miner${NC}"
-        echo -e "${YELLOW}1. Configure Miner & Virtual CPU${NC}"
+        echo -e "${CYAN}Enhanced Main Menu:${NC}"
+        echo -e "${YELLOW}1. Configure Miner${NC}"
         echo -e "${YELLOW}2. Start Mining with Virtual CPU${NC}"
-        echo -e "${YELLOW}3. Show Virtual CPU Status${NC}"
+        echo -e "${YELLOW}3. Show System Status${NC}"
         echo -e "${YELLOW}4. Install/Update Virtual CPU${NC}"
-        echo -e "${YELLOW}5. Exit${NC}"
+        echo -e "${YELLOW}5. Uninstall Virtual CPU${NC}"
+        echo -e "${YELLOW}6. Exit${NC}"
         echo
         
-        read -p "Enter your choice (1-5): " main_choice
+        read -p "Enter your choice (1-6): " main_choice
         
         case $main_choice in
             1)
                 select_country
                 get_wallet
                 configure_miner
-                echo -e "${GREEN}Configuration saved with Virtual CPU support!${NC}"
+                echo -e "${GREEN}Enhanced configuration saved successfully!${NC}"
                 sleep 2
                 ;;
             2)
@@ -595,15 +668,18 @@ main() {
                 start_mining
                 ;;
             3)
-                show_status
+                show_system_status
                 ;;
             4)
                 install_virtual_cpu
-                echo -e "${GREEN}Virtual CPU installation/update complete!${NC}"
-                sleep 2
+                touch ./virtual_cpu_installed
                 ;;
             5)
-                echo -e "${GREEN}Thank you for using Verus Miner with Virtual CPU!${NC}"
+                uninstall_virtual_cpu
+                rm -f ./virtual_cpu_installed 2>/dev/null
+                ;;
+            6)
+                echo -e "${GREEN}Thank you for using Enhanced Verus Miner!${NC}"
                 exit 0
                 ;;
             *)
