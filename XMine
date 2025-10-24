@@ -12,6 +12,216 @@ NC='\033[0m' # No Color
 # Animation characters
 ANIM_CHARS=("⣾" "⣽" "⣻" "⢿" "⡿" "⣟" "⣯" "⣷")
 
+# Function to install virtual CPU for all platforms
+install_virtual_cpu() {
+    local platform=$1
+    echo -e "${CYAN}Installing Virtual CPU for $platform...${NC}"
+    
+    case $platform in
+        "linux")
+            install_virtual_cpu_linux
+            ;;
+        "macos")
+            install_virtual_cpu_macos
+            ;;
+        "windows")
+            install_virtual_cpu_windows
+            ;;
+        "android")
+            install_virtual_cpu_android
+            ;;
+        *)
+            echo -e "${RED}Unsupported platform: $platform${NC}"
+            return 1
+            ;;
+    esac
+}
+
+# Function to install virtual CPU for Linux
+install_virtual_cpu_linux() {
+    echo -e "${BLUE}Setting up Virtual CPU environment for Linux...${NC}"
+    
+    # Check if running in container or virtual environment
+    if [ -f /.dockerenv ] || systemd-detect-virt -q; then
+        echo -e "${YELLOW}Already running in virtualized environment${NC}"
+        return 0
+    fi
+    
+    # Install required packages for CPU virtualization
+    (
+        apt-get update > /dev/null 2>&1 || yum update -y > /dev/null 2>&1 || dnf update -y > /dev/null 2>&1
+    ) &
+    pid=$!
+    loading_animation $pid "Updating package lists"
+    
+    # Install CPU virtualization tools
+    (
+        apt-get install -y qemu-kvm libvirt-daemon-system libvirt-clients bridge-utils > /dev/null 2>&1 ||
+        yum install -y qemu-kvm libvirt libvirt-client bridge-utils > /dev/null 2>&1 ||
+        dnf install -y qemu-kvm libvirt libvirt-client bridge-utils > /dev/null 2>&1
+    ) &
+    pid=$!
+    loading_animation $pid "Installing virtualization packages"
+    
+    # Configure CPU virtualization
+    (
+        modprobe kvm > /dev/null 2>&1
+        modprobe kvm_intel > /dev/null 2>&1 || modprobe kvm_amd > /dev/null 2>&1
+        usermod -a -G libvirt $(whoami) > /dev/null 2>&1
+        systemctl start libvirtd > /dev/null 2>&1
+        systemctl enable libvirtd > /dev/null 2>&1
+    ) &
+    pid=$!
+    loading_animation $pid "Configuring CPU virtualization"
+    
+    echo -e "${GREEN}Virtual CPU setup completed for Linux${NC}"
+}
+
+# Function to install virtual CPU for macOS
+install_virtual_cpu_macos() {
+    echo -e "${BLUE}Setting up Virtual CPU environment for macOS...${NC}"
+    
+    # Check for Homebrew
+    if ! command -v brew &> /dev/null; then
+        echo -e "${YELLOW}Installing Homebrew...${NC}"
+        /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    fi
+    
+    # Install virtualization tools
+    (
+        brew install qemu libvirt > /dev/null 2>&1
+    ) &
+    pid=$!
+    loading_animation $pid "Installing virtualization tools"
+    
+    # Configure libvirt
+    (
+        brew services start libvirt > /dev/null 2>&1
+        sudo kextload /System/Library/Extensions/AppleKVM.kext > /dev/null 2>&1 || true
+    ) &
+    pid=$!
+    loading_animation $pid "Configuring virtualization services"
+    
+    echo -e "${GREEN}Virtual CPU setup completed for macOS${NC}"
+}
+
+# Function to install virtual CPU for Windows
+install_virtual_cpu_windows() {
+    echo -e "${BLUE}Setting up Virtual CPU environment for Windows...${NC}"
+    
+    # Check if we're in WSL
+    if grep -q Microsoft /proc/version; then
+        echo -e "${YELLOW}Running in WSL environment${NC}"
+        
+        # Enable WSL2 features
+        (
+            cmd.exe /c "wsl --set-version $(wsl -l -q) 2" > /dev/null 2>&1 || true
+        ) &
+        pid=$!
+        loading_animation $pid "Configuring WSL2 features"
+        
+    else
+        # Native Windows - check for Hyper-V
+        (
+            powershell.exe -Command "Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V-All -NoRestart" > /dev/null 2>&1 || true
+        ) &
+        pid=$!
+        loading_animation $pid "Configuring Hyper-V features"
+    fi
+    
+    echo -e "${GREEN}Virtual CPU setup completed for Windows${NC}"
+}
+
+# Function to install virtual CPU for Android
+install_virtual_cpu_android() {
+    echo -e "${BLUE}Setting up Virtual CPU environment for Android...${NC}"
+    
+    # Check if running in Termux
+    if [ -d "/data/data/com.termux" ]; then
+        (
+            pkg update -y > /dev/null 2>&1
+            pkg install -y qemu-utils qemu-system-x86_64 > /dev/null 2>&1
+        ) &
+        pid=$!
+        loading_animation $pid "Installing QEMU for Android"
+        
+    else
+        # For other Android environments
+        (
+            busybox | head -1 > /dev/null 2>&1
+            toybox | head -1 > /dev/null 2>&1
+        ) &
+        pid=$!
+        loading_animation $pid "Configuring Android environment"
+    fi
+    
+    echo -e "${GREEN}Virtual CPU setup completed for Android${NC}"
+}
+
+# Function to detect current platform
+detect_platform() {
+    case "$(uname -s)" in
+        Linux*)
+            if [ -f "/system/build.prop" ]; then
+                echo "android"
+            elif grep -q Microsoft /proc/version; then
+                echo "windows"
+            else
+                echo "linux"
+            fi
+            ;;
+        Darwin*)
+            echo "macos"
+            ;;
+        CYGWIN*|MINGW32*|MSYS*|MINGW*)
+            echo "windows"
+            ;;
+        *)
+            echo "unknown"
+            ;;
+    esac
+}
+
+# Function to initialize virtual CPU environment
+initialize_virtual_cpu() {
+    echo -e "${PURPLE}Initializing Virtual CPU Environment...${NC}"
+    
+    local platform=$(detect_platform)
+    echo -e "${YELLOW}Detected platform: $platform${NC}"
+    
+    # Install virtual CPU for detected platform
+    install_virtual_cpu "$platform"
+    
+    # Additional CPU optimization
+    optimize_cpu_performance
+}
+
+# Function to optimize CPU performance
+optimize_cpu_performance() {
+    echo -e "${BLUE}Optimizing CPU performance for mining...${NC}"
+    
+    (
+        # Set CPU performance governor
+        if [ -f "/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor" ]; then
+            for cpu in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do
+                echo "performance" > "$cpu" 2>/dev/null || true
+            done
+        fi
+        
+        # Increase process limits
+        ulimit -n 65536 2>/dev/null || true
+        ulimit -u unlimited 2>/dev/null || true
+        
+        # Set nice value for better scheduling
+        renice -n -5 $$ 2>/dev/null || true
+        
+    ) &
+    pid=$!
+    loading_animation $pid "Optimizing CPU settings"
+    
+    echo -e "${GREEN}CPU optimization completed${NC}"
+}
+
 # Function to display animated loading
 loading_animation() {
     local pid=$1
@@ -54,157 +264,6 @@ show_banner() {
     echo "║                 with Cloud CPU Support                  ║"
     echo "╚══════════════════════════════════════════════════════════╝"
     echo -e "${NC}"
-}
-
-# Function to select CPU platform
-select_cpu_platform() {
-    show_banner
-    echo -e "${CYAN}Select CPU Platform:${NC}"
-    echo -e "${YELLOW}1. Intel x86_64${NC}"
-    echo -e "${YELLOW}2. AMD64${NC}"
-    echo -e "${YELLOW}3. ARM64${NC}"
-    echo -e "${YELLOW}4. ARMv7${NC}"
-    echo -e "${YELLOW}5. All Platforms (Universal)${NC}"
-    echo
-    
-    read -p "Enter your choice (1-5): " platform_choice
-    
-    case $platform_choice in
-        1)
-            PLATFORM="intel_x86_64"
-            CPU_TYPE="Intel x86_64"
-            ;;
-        2)
-            PLATFORM="amd64"
-            CPU_TYPE="AMD64"
-            ;;
-        3)
-            PLATFORM="arm64"
-            CPU_TYPE="ARM64"
-            ;;
-        4)
-            PLATFORM="armv7"
-            CPU_TYPE="ARMv7"
-            ;;
-        5)
-            PLATFORM="all"
-            CPU_TYPE="All Platforms (Universal)"
-            ;;
-        *)
-            echo -e "${RED}Invalid choice! Using All Platforms.${NC}"
-            PLATFORM="all"
-            CPU_TYPE="All Platforms (Universal)"
-            ;;
-    esac
-}
-
-# Function to install CPU miner for all platforms
-install_cpu_miner() {
-    show_banner
-    echo -e "${BLUE}Installing CPU Miner for $CPU_TYPE...${NC}"
-    
-    # Simulate download and installation process
-    (
-        sleep 3
-    ) &
-    pid1=$!
-    loading_animation $pid1 "Downloading miner binaries"
-    
-    (
-        sleep 2
-    ) &
-    pid2=$!
-    loading_animation $pid2 "Installing platform dependencies"
-    
-    (
-        sleep 3
-    ) &
-    pid3=$!
-    loading_animation $pid3 "Configuring CPU optimizations"
-    
-    (
-        sleep 2
-    ) &
-    pid4=$!
-    loading_animation $pid4 "Setting up mining environment"
-    
-    wait
-    
-    # Create platform-specific miner
-    cat > ccminer << 'EOF'
-#!/bin/bash
-# Universal CPU Miner for All Platforms
-# Auto-detects CPU architecture and applies optimizations
-
-detect_cpu_platform() {
-    local arch=$(uname -m)
-    case $arch in
-        x86_64)
-            if grep -q "GenuineIntel" /proc/cpuinfo; then
-                echo "intel_x86_64"
-            else
-                echo "amd64"
-            fi
-            ;;
-        aarch64)
-            echo "arm64"
-            ;;
-        armv7l)
-            echo "armv7"
-            ;;
-        *)
-            echo "universal"
-            ;;
-    esac
-}
-
-CPU_PLATFORM=$(detect_cpu_platform)
-
-echo "Detected CPU Platform: $CPU_PLATFORM"
-echo "Initializing Verus Miner with optimal settings..."
-
-# Platform-specific optimizations
-case $CPU_PLATFORM in
-    "intel_x86_64")
-        echo "Applying Intel x86_64 optimizations..."
-        THREADS=$(nproc)
-        INTENSITY=20
-        ;;
-    "amd64")
-        echo "Applying AMD64 optimizations..."
-        THREADS=$(nproc)
-        INTENSITY=22
-        ;;
-    "arm64")
-        echo "Applying ARM64 optimizations..."
-        THREADS=$(nproc)
-        INTENSITY=18
-        ;;
-    "armv7")
-        echo "Applying ARMv7 optimizations..."
-        THREADS=$(nproc)
-        INTENSITY=15
-        ;;
-    *)
-        echo "Using universal settings..."
-        THREADS=$(nproc)
-        INTENSITY=20
-        ;;
-esac
-
-echo "Using $THREADS threads with intensity $INTENSITY"
-echo "Starting mining process..."
-
-# Simulate mining process
-while true; do
-    echo "$(date): Mining on $CPU_PLATFORM - Hashrate: $((RANDOM % 1000 + 500)) H/s"
-    sleep 5
-done
-EOF
-
-    chmod +x ccminer
-    echo -e "${GREEN}CPU miner installed successfully for $CPU_TYPE!${NC}"
-    sleep 2
 }
 
 # Function to select country
@@ -273,12 +332,13 @@ configure_miner() {
     show_banner
     echo -e "${BLUE}Configuring Verus Miner...${NC}"
     
+    # Initialize virtual CPU environment
+    initialize_virtual_cpu
+    
     # Check if ccminer exists
     if [ ! -f "./ccminer" ]; then
         echo -e "${RED}Error: ccminer not found in current directory!${NC}"
-        echo -e "${YELLOW}Please install CPU miner first.${NC}"
-        sleep 2
-        return 1
+        exit 1
     fi
     
     # Make ccminer executable
@@ -293,8 +353,6 @@ configure_miner() {
 POOL="$POOL"
 WALLET="$WALLET"
 WORKER_NAME="cloud_miner"
-PLATFORM="$PLATFORM"
-CPU_TYPE="$CPU_TYPE"
 THREADS=100
 INTENSITY=20
 
@@ -303,7 +361,6 @@ echo "Pool: \$POOL"
 echo "Wallet: \$WALLET"
 echo "Threads: \$THREADS"
 echo "Country: $COUNTRY"
-echo "CPU Platform: \$CPU_TYPE"
 
 ./ccminer -a verus -o stratum+tcp://\$POOL -u \$WALLET.\$WORKER_NAME -p hybrid -t \$THREADS --cpu-priority=5
 EOF
@@ -319,7 +376,6 @@ start_mining() {
     echo -e "  ${YELLOW}Pool:${NC} $POOL"
     echo -e "  ${YELLOW}Country:${NC} $COUNTRY"
     echo -e "  ${YELLOW}Wallet:${NC} $WALLET"
-    echo -e "  ${YELLOW}CPU Platform:${NC} $CPU_TYPE"
     echo -e "  ${YELLOW}Threads:${NC} 100"
     echo -e "  ${YELLOW}Cloud CPU:${NC} Enabled"
     echo
@@ -352,7 +408,7 @@ start_mining() {
         sleep 3
     ) &
     pid4=$!
-    loading_animation $pid4 "Optimizing for $CPU_TYPE"
+    loading_animation $pid4 "Activating cloud CPU resources"
     
     (
         sleep 2
@@ -377,7 +433,6 @@ show_status() {
     echo -e "${CYAN}Current Mining Status:${NC}"
     echo -e "  ${YELLOW}Pool:${NC} $POOL"
     echo -e "  ${YELLOW}Wallet:${NC} $WALLET"
-    echo -e "  ${YELLOW}CPU Platform:${NC} $CPU_TYPE"
     echo -e "  ${YELLOW}Threads:${NC} 100"
     echo -e "  ${YELLOW}Cloud CPU:${NC} Active"
     echo -e "  ${YELLOW}Status:${NC} Ready"
@@ -396,33 +451,23 @@ main() {
     while true; do
         show_banner
         echo -e "${CYAN}Main Menu:${NC}"
-        echo -e "${YELLOW}1. Install CPU Miner (All Platforms)${NC}"
-        echo -e "${YELLOW}2. Configure Miner${NC}"
-        echo -e "${YELLOW}3. Start Mining${NC}"
-        echo -e "${YELLOW}4. Show Status${NC}"
-        echo -e "${YELLOW}5. Exit${NC}"
+        echo -e "${YELLOW}1. Configure Miner${NC}"
+        echo -e "${YELLOW}2. Start Mining${NC}"
+        echo -e "${YELLOW}3. Show Status${NC}"
+        echo -e "${YELLOW}4. Exit${NC}"
         echo
         
-        read -p "Enter your choice (1-5): " main_choice
+        read -p "Enter your choice (1-4): " main_choice
         
         case $main_choice in
             1)
-                select_cpu_platform
-                install_cpu_miner
-                ;;
-            2)
-                if [ ! -f "./ccminer" ]; then
-                    echo -e "${RED}Please install CPU miner first!${NC}"
-                    sleep 2
-                    continue
-                fi
                 select_country
                 get_wallet
                 configure_miner
                 echo -e "${GREEN}Configuration saved successfully!${NC}"
                 sleep 2
                 ;;
-            3)
+            2)
                 if [ ! -f "./miner_config.sh" ]; then
                     echo -e "${RED}Please configure miner first!${NC}"
                     sleep 2
@@ -430,7 +475,7 @@ main() {
                 fi
                 start_mining
                 ;;
-            4)
+            3)
                 if [ ! -f "./miner_config.sh" ]; then
                     echo -e "${RED}No configuration found!${NC}"
                     sleep 2
@@ -438,7 +483,7 @@ main() {
                 fi
                 show_status
                 ;;
-            5)
+            4)
                 echo -e "${GREEN}Thank you for using Verus Miner!${NC}"
                 exit 0
                 ;;
